@@ -1,19 +1,26 @@
 import AbstractView from '../framework/view/abstract-view.js';
 import {SortType} from '../const.js';
 
-const createSortButtonTemplate = ({type, title, isDisabled}, currentSortType) => {
-  const activeClassName = type === currentSortType ? 'trip-sort__btn--active' : '';
+const createSortItemTemplate = ({type, title, isDisabled}, currentSortType) => {
+  const checkedAttribute = type === currentSortType ? 'checked' : '';
   const disabledAttribute = isDisabled ? 'disabled' : '';
 
   return (
-    `<button
-      class="trip-sort__btn ${activeClassName}"
-      type="button"
-      data-sort-type="${type}"
-      ${disabledAttribute}
-    >
-      ${title}
-    </button>`
+    `<div class="trip-sort__item trip-sort__item--${type}">
+      <input
+        id="sort-${type}"
+        class="trip-sort__input visually-hidden"
+        type="radio"
+        name="trip-sort"
+        value="sort-${type}"
+        data-sort-type="${type}"
+        ${checkedAttribute}
+        ${disabledAttribute}
+      >
+      <label class="trip-sort__btn" for="sort-${type}">
+        ${title}
+      </label>
+    </div>`
   );
 };
 
@@ -49,7 +56,7 @@ const createSortTemplate = (currentSortType) => {
   return (
     `<form class="trip-events__trip-sort trip-sort" action="#" method="get">
       ${sortItems
-      .map((sortItem) => createSortButtonTemplate(sortItem, currentSortType))
+      .map((sortItem) => createSortItemTemplate(sortItem, currentSortType))
       .join('')}
     </form>`
   );
@@ -65,7 +72,7 @@ export default class SortView extends AbstractView {
     this.#currentSortType = currentSortType;
     this.#handleSortTypeChange = onSortTypeChange;
 
-    this.element.addEventListener('click', this.#sortTypeChangeHandler);
+    this.element.addEventListener('change', this.#sortTypeChangeHandler);
   }
 
   get template() {
@@ -73,14 +80,12 @@ export default class SortView extends AbstractView {
   }
 
   #sortTypeChangeHandler = (evt) => {
-    const sortButton = evt.target.closest('.trip-sort__btn');
-
-    if (!sortButton || sortButton.disabled) {
+    if (!evt.target.classList.contains('trip-sort__input')) {
       return;
     }
 
     evt.preventDefault();
 
-    this.#handleSortTypeChange(sortButton.dataset.sortType);
+    this.#handleSortTypeChange(evt.target.dataset.sortType);
   };
 }

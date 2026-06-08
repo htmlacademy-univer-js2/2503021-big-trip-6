@@ -1,3 +1,4 @@
+import he from 'he';
 import flatpickr from 'flatpickr';
 import 'flatpickr/dist/flatpickr.min.css';
 import AbstractStatefulView from '../framework/view/abstract-stateful-view.js';
@@ -43,7 +44,7 @@ const createEventTypeTemplate = (type, currentType, isDisabled) => {
 };
 
 const createDestinationOptionTemplate = (destination) => (
-  `<option value="${destination.name}"></option>`
+  `<option value="${he.encode(destination.name)}"></option>`
 );
 
 const createAvailableOfferTemplate = (offer, selectedOfferIds, isDisabled) => {
@@ -62,7 +63,7 @@ const createAvailableOfferTemplate = (offer, selectedOfferIds, isDisabled) => {
         ${disabled}
       >
       <label class="event__offer-label" for="event-offer-${offer.id}">
-        <span class="event__offer-title">${offer.title}</span>
+        <span class="event__offer-title">${he.encode(offer.title)}</span>
         &plus;&euro;&nbsp;
         <span class="event__offer-price">${offer.price}</span>
       </label>
@@ -71,10 +72,46 @@ const createAvailableOfferTemplate = (offer, selectedOfferIds, isDisabled) => {
 };
 
 const createDestinationPictureTemplate = (picture) => (
-  `<img class="event__photo" src="${picture.src}" alt="${picture.description}">`
+  `<img
+    class="event__photo"
+    src="${picture.src}"
+    alt="${he.encode(picture.description)}"
+  >`
 );
 
-const createOffersSectionTemplate = (availableOffers, selectedOfferIds, isDisabled) => {
+const createDestinationPicturesTemplate = (pictures) => {
+  if (pictures.length === 0) {
+    return '';
+  }
+
+  return (
+    `<div class="event__photos-container">
+      <div class="event__photos-tape">
+        ${pictures
+      .map((picture) => createDestinationPictureTemplate(picture))
+      .join('')}
+      </div>
+    </div>`
+  );
+};
+
+const createDestinationDescriptionTemplate = (description) => {
+  if (!description) {
+    return '';
+  }
+
+  return (
+    `<p class="event__destination-description">
+      ${he.encode(description)}
+    </p>`
+  );
+};
+
+const createOffersSectionTemplate = (
+  availableOffers,
+  selectedOfferIds,
+  isDisabled
+) => {
   if (availableOffers.length === 0) {
     return '';
   }
@@ -101,7 +138,10 @@ const createDestinationSectionTemplate = (destination) => {
     return '';
   }
 
-  if (!destination.description && destination.pictures.length === 0) {
+  const pictures = destination.pictures ?? [];
+  const description = destination.description ?? '';
+
+  if (!description && pictures.length === 0) {
     return '';
   }
 
@@ -111,15 +151,8 @@ const createDestinationSectionTemplate = (destination) => {
         Destination
       </h3>
 
-      <p class="event__destination-description">${destination.description}</p>
-
-      <div class="event__photos-container">
-        <div class="event__photos-tape">
-          ${destination.pictures
-      .map((picture) => createDestinationPictureTemplate(picture))
-      .join('')}
-        </div>
-      </div>
+      ${createDestinationDescriptionTemplate(description)}
+      ${createDestinationPicturesTemplate(pictures)}
     </section>`
   );
 };
@@ -145,7 +178,9 @@ const createEventEditTemplate = ({point, destinations, offers}) => {
     .map((destination) => createDestinationOptionTemplate(destination))
     .join('');
 
-  const destinationName = currentDestination ? currentDestination.name : '';
+  const destinationName = currentDestination
+    ? he.encode(currentDestination.name)
+    : '';
 
   return (
     `<li class="trip-events__item">
@@ -246,15 +281,14 @@ const createEventEditTemplate = ({point, destinations, offers}) => {
             ${saveButtonText}
           </button>
           <button
-            class="event__reset-btn"
-            type="reset"
-            ${isDisabled}
-          >
-            ${deleteButtonText}
-          </button>
-          <button class="event__rollup-btn" type="button" ${isDisabled}>
-            <span class="visually-hidden">Open event</span>
-          </button>
+  class="event__reset-btn"
+  type="reset"
+>
+  ${deleteButtonText}
+</button>
+<button class="event__rollup-btn" type="button">
+  <span class="visually-hidden">Open event</span>
+</button>
         </header>
 
         <section class="event__details">
@@ -307,9 +341,7 @@ export default class EventEditView extends AbstractStatefulView {
     });
   }
 
-  removeElement() {
-    super.removeElement();
-
+  #destroyDatepickers() {
     if (this.#datepickerStart) {
       this.#datepickerStart.destroy();
       this.#datepickerStart = null;
@@ -321,8 +353,22 @@ export default class EventEditView extends AbstractStatefulView {
     }
   }
 
+  removeElement() {
+    this.#destroyDatepickers();
+
+    super.removeElement();
+  }
+
   reset(point) {
     this.updateElement(EventEditView.parsePointToState(point));
+  }
+
+  restoreControls() {
+    this._setState({
+      isDisabled: false,
+      isSaving: false,
+      isDeleting: false,
+    });
   }
 
   _restoreHandlers() {
@@ -340,7 +386,7 @@ export default class EventEditView extends AbstractStatefulView {
 
     this.element
       .querySelector('.event__input--destination')
-      .addEventListener('change', this.#destinationChangeHandler);
+      .addEventListener('input', this.#destinationChangeHandler);
 
     this.element
       .querySelector('.event__reset-btn')
@@ -362,7 +408,26 @@ export default class EventEditView extends AbstractStatefulView {
   #formSubmitHandler = (evt) => {
     evt.preventDefault();
 
-    const point = EventEditView.parseStateToPoint(this._state);
+    if (this._state.isDisabled) {
+      return;
+    }
+
+    const destinationName = this.element
+      .querySelector('.event__input--destination')
+      .value;
+
+    const selectedDestination = this.#destinations.find(
+      (destination) => destination.name === destinationName
+    );
+
+    if (!selectedDestination) {
+      return;
+    }
+
+    const point = EventEditView.parseStateToPoint({
+      ...this._state,
+      destinationId: selectedDestination.id,
+    });
 
     if (!point.destinationId || !point.dateFrom || !point.dateTo) {
       return;
@@ -373,6 +438,10 @@ export default class EventEditView extends AbstractStatefulView {
 
   #rollupClickHandler = (evt) => {
     evt.preventDefault();
+
+    if (this._state.isDisabled) {
+      return;
+    }
 
     this.#handleRollupClick();
   };
@@ -419,6 +488,10 @@ export default class EventEditView extends AbstractStatefulView {
   #deleteClickHandler = (evt) => {
     evt.preventDefault();
 
+    if (this._state.isDisabled) {
+      return;
+    }
+
     this.#handleDeleteClick(EventEditView.parseStateToPoint(this._state));
   };
 
@@ -429,6 +502,8 @@ export default class EventEditView extends AbstractStatefulView {
         dateFormat: 'd/m/y H:i',
         enableTime: true,
         'time_24hr': true,
+        allowInput: true,
+        clickOpens: true,
         defaultDate: this._state.dateFrom,
         onChange: this.#dateFromChangeHandler,
       }
@@ -440,6 +515,8 @@ export default class EventEditView extends AbstractStatefulView {
         dateFormat: 'd/m/y H:i',
         enableTime: true,
         'time_24hr': true,
+        allowInput: true,
+        clickOpens: true,
         defaultDate: this._state.dateTo,
         minDate: this._state.dateFrom,
         onChange: this.#dateToChangeHandler,
@@ -457,7 +534,7 @@ export default class EventEditView extends AbstractStatefulView {
       ? dateFrom
       : this._state.dateTo;
 
-    this.updateElement({
+    this._setState({
       dateFrom,
       dateTo,
     });
@@ -468,7 +545,7 @@ export default class EventEditView extends AbstractStatefulView {
       return;
     }
 
-    this.updateElement({
+    this._setState({
       dateTo: userDate.toISOString(),
     });
   };

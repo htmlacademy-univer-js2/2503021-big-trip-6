@@ -34,14 +34,12 @@ const getTripDates = (points) => {
     return '';
   }
 
-  const datesFrom = points.map((point) => new Date(point.dateFrom));
-  const datesTo = points.map((point) => new Date(point.dateTo));
+  const sortedPoints = getSortedPointsByDateFrom(points);
+  const firstPoint = sortedPoints[0];
+  const lastPoint = sortedPoints[sortedPoints.length - 1];
 
-  const minDateFrom = new Date(Math.min(...datesFrom));
-  const maxDateTo = new Date(Math.max(...datesTo));
-
-  const dateFrom = dayjs(minDateFrom).format('MMM DD').toUpperCase();
-  const dateTo = dayjs(maxDateTo).format('MMM DD').toUpperCase();
+  const dateFrom = dayjs(firstPoint.dateFrom).format('D MMM').toUpperCase();
+  const dateTo = dayjs(lastPoint.dateTo).format('D MMM').toUpperCase();
 
   return `${dateFrom}&nbsp;&mdash;&nbsp;${dateTo}`;
 };

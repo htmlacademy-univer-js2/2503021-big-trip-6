@@ -31,10 +31,15 @@ const UpdateType = {
   MAJOR: 'MAJOR',
 };
 
+const LoadErrorMessage = {
+  FAILED: 'Failed to load latest route information',
+};
+
 export {
   FilterType,
   NoEventMessage,
   SortType,
   UserAction,
   UpdateType,
+  LoadErrorMessage,
 };

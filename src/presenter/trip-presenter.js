@@ -1,6 +1,7 @@
 import {render, remove} from '../framework/render.js';
 import {
   FilterType,
+  LoadErrorMessage,
   NoEventMessage,
   SortType,
   UpdateType,
@@ -26,6 +27,8 @@ export default class TripPresenter {
   #sortComponent = null;
   #noEventComponent = null;
   #loadingComponent = new LoadingView();
+  #isCreating = false;
+  #isActionInProgress = false;
 
   constructor({tripEventsContainer, tripModel, filterModel, newEventButton}) {
     this.#tripEventsContainer = tripEventsContainer;
@@ -56,9 +59,18 @@ export default class TripPresenter {
 
   #renderTrip() {
     if (this.#tripModel.isLoading) {
+      this.#newEventButton.disabled = true;
       this.#renderLoading();
       return;
     }
+
+    if (this.#tripModel.isLoadingError) {
+      this.#newEventButton.disabled = true;
+      this.#renderLoadError();
+      return;
+    }
+
+    this.#newEventButton.disabled = this.#isCreating;
 
     const points = this.points;
 
@@ -78,6 +90,14 @@ export default class TripPresenter {
   #renderNoEvents() {
     this.#noEventComponent = new NoEventView({
       message: NoEventMessage[this.#filterModel.filter],
+    });
+
+    render(this.#noEventComponent, this.#tripEventsContainer);
+  }
+
+  #renderLoadError() {
+    this.#noEventComponent = new NoEventView({
+      message: LoadErrorMessage.FAILED,
     });
 
     render(this.#noEventComponent, this.#tripEventsContainer);
@@ -153,7 +173,6 @@ export default class TripPresenter {
     if (this.#newEventPresenter !== null) {
       this.#newEventPresenter.destroy();
       this.#newEventPresenter = null;
-      this.#newEventButton.disabled = false;
     }
 
     remove(this.#sortComponent);
@@ -175,6 +194,7 @@ export default class TripPresenter {
         this.#eventPresenters.get(data.id).init(data);
         break;
       case UpdateType.MINOR:
+        this.#isCreating = false;
         this.#clearTrip();
         this.#renderTrip();
         break;
@@ -192,36 +212,75 @@ export default class TripPresenter {
 
   #handleViewAction = async (actionType, updateType, update) => {
     switch (actionType) {
-      case UserAction.UPDATE_POINT:
-        this.#eventPresenters.get(update.id).setSaving();
+      case UserAction.UPDATE_POINT: {
+        const eventPresenter = this.#eventPresenters.get(update.id);
+
+        if (!eventPresenter) {
+          return;
+        }
+
+        this.#isActionInProgress = true;
+        eventPresenter.setSaving();
 
         try {
           await this.#tripModel.updatePoint(updateType, update);
         } catch (err) {
-          this.#eventPresenters.get(update.id).setAborting();
+          const currentPresenter = this.#eventPresenters.get(update.id);
+
+          if (currentPresenter) {
+            currentPresenter.setAborting();
+          }
+        } finally {
+          this.#isActionInProgress = false;
         }
 
         break;
+      }
+
       case UserAction.ADD_POINT:
+        if (this.#newEventPresenter === null) {
+          return;
+        }
+
+        this.#isActionInProgress = true;
         this.#newEventPresenter.setSaving();
 
         try {
           await this.#tripModel.addPoint(updateType, update);
         } catch (err) {
-          this.#newEventPresenter.setAborting();
+          if (this.#newEventPresenter !== null) {
+            this.#newEventPresenter.setAborting();
+          }
+        } finally {
+          this.#isActionInProgress = false;
         }
 
         break;
-      case UserAction.DELETE_POINT:
-        this.#eventPresenters.get(update.id).setDeleting();
+
+      case UserAction.DELETE_POINT: {
+        const eventPresenter = this.#eventPresenters.get(update.id);
+
+        if (!eventPresenter) {
+          return;
+        }
+
+        this.#isActionInProgress = true;
+        eventPresenter.setDeleting();
 
         try {
           await this.#tripModel.deletePoint(updateType, update);
         } catch (err) {
-          this.#eventPresenters.get(update.id).setAborting();
+          const currentPresenter = this.#eventPresenters.get(update.id);
+
+          if (currentPresenter) {
+            currentPresenter.setAborting();
+          }
+        } finally {
+          this.#isActionInProgress = false;
         }
 
         break;
+      }
     }
   };
 
@@ -237,6 +296,10 @@ export default class TripPresenter {
   };
 
   #handleModeChange = () => {
+    if (this.#isActionInProgress) {
+      return false;
+    }
+
     this.#eventPresenters.forEach((presenter) => {
       presenter.resetView();
     });
@@ -244,15 +307,28 @@ export default class TripPresenter {
     if (this.#newEventPresenter !== null) {
       this.#handleNewPointDestroy();
     }
+
+    return true;
   };
 
   #handleNewEventButtonClick = () => {
-    this.#handleModeChange();
+    if (
+      this.#tripModel.isLoading ||
+    this.#tripModel.isLoadingError ||
+    this.#isActionInProgress
+    ) {
+      return;
+    }
 
-    this.#newEventButton.disabled = true;
+    if (!this.#handleModeChange()) {
+      return;
+    }
+
+    this.#isCreating = true;
     this.#currentSortType = SortType.DAY;
     this.#filterModel.setFilter(UpdateType.MAJOR, FilterType.EVERYTHING);
 
+    this.#newEventButton.disabled = true;
     this.#renderNewPoint();
   };
 
@@ -263,6 +339,7 @@ export default class TripPresenter {
 
     this.#newEventPresenter.destroy();
     this.#newEventPresenter = null;
+    this.#isCreating = false;
     this.#newEventButton.disabled = false;
 
     if (this.#tripModel.points.length === 0) {

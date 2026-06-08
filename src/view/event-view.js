@@ -1,3 +1,4 @@
+import he from 'he';
 import AbstractView from '../framework/view/abstract-view.js';
 import {
   getDuration,
@@ -7,7 +8,7 @@ import {
 
 const createOfferTemplate = (offer) => (
   `<li class="event__offer">
-    <span class="event__offer-title">${offer.title}</span>
+    <span class="event__offer-title">${he.encode(offer.title)}</span>
     &plus;&euro;&nbsp;
     <span class="event__offer-price">${offer.price}</span>
   </li>`
@@ -18,6 +19,8 @@ function createEventTemplate({point, destination, selectedOffers}) {
   const offersTemplate = selectedOffers
     .map((offer) => createOfferTemplate(offer))
     .join('');
+
+  const destinationName = destination ? destination.name : '';
 
   return (
     `<li class="trip-events__item">
@@ -36,7 +39,9 @@ function createEventTemplate({point, destination, selectedOffers}) {
           >
         </div>
 
-        <h3 class="event__title">${point.type} ${destination.name}</h3>
+        <h3 class="event__title">
+          ${he.encode(point.type)} ${he.encode(destinationName)}
+        </h3>
 
         <div class="event__schedule">
           <p class="event__time">

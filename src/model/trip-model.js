@@ -1,11 +1,14 @@
 import Observable from '../framework/observable.js';
 
+const LOADING_DELAY = 600;
+
 export default class TripModel extends Observable {
   #points = [];
   #destinations = [];
   #offers = [];
   #tripApiService = null;
   #isLoading = true;
+  #isLoadingError = false;
 
   constructor({tripApiService}) {
     super();
@@ -33,21 +36,28 @@ export default class TripModel extends Observable {
     return this.#isLoading;
   }
 
+  get isLoadingError() {
+    return this.#isLoadingError;
+  }
+
   async init(updateType) {
     try {
       const [points, destinations, offers] = await Promise.all([
         this.#tripApiService.points,
         this.#tripApiService.destinations,
         this.#tripApiService.offers,
+        new Promise((resolve) => setTimeout(resolve, LOADING_DELAY)),
       ]);
 
       this.#points = points;
       this.#destinations = destinations;
       this.#offers = offers;
+      this.#isLoadingError = false;
     } catch (err) {
       this.#points = [];
       this.#destinations = [];
       this.#offers = [];
+      this.#isLoadingError = true;
     }
 
     this.#isLoading = false;

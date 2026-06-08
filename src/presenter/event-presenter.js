@@ -100,16 +100,11 @@ export default class EventPresenter {
   }
 
   setAborting() {
-    const resetFormState = () => {
-      this.#eventEditComponent.updateElement({
-        isDisabled: false,
-        isSaving: false,
-        isDeleting: false,
-      });
-    };
-
     if (this.#container.contains(this.#eventEditComponent.element)) {
-      this.#eventEditComponent.shake(resetFormState);
+      this.#eventEditComponent.restoreControls();
+      this.#eventEditComponent.shake();
+
+      return;
     }
 
     if (this.#container.contains(this.#eventComponent.element)) {
@@ -137,7 +132,10 @@ export default class EventPresenter {
   };
 
   #handleEditClick = () => {
-    this.#handleModeChange();
+    if (!this.#handleModeChange()) {
+      return;
+    }
+
     this.#replaceEventToForm();
   };
 

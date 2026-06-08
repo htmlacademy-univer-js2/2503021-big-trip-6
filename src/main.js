@@ -6,7 +6,7 @@ import TripApiService from './trip-api-service.js';
 import {UpdateType} from './const.js';
 import TripInfoPresenter from './presenter/trip-info-presenter.js';
 
-const END_POINT = 'https://21.objects.pages.academy/big-trip';
+const END_POINT = 'https://23.objects.htmlacademy.pro/big-trip';
 const AUTHORIZATION = `Basic ${Math.random().toString(36).slice(2)}`;
 
 const filtersContainer = document.querySelector('.trip-controls__filters');
